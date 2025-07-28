@@ -4,9 +4,8 @@ const ctx = canvas.getContext("2d");
 
 let isDragging = false;
 let lastX, lastY;
-let dragObj = null; // Currently dragged object
+let dragObj = null;
 
-// Variables for panning and zooming
 let panX = 0, panY = 0;
 let zoom = 1;
 let isPanning = false;
@@ -18,7 +17,6 @@ let cursorX = 0, cursorY = 0;
 let blink = true;
 let inputFadeIn = 1;
 
-// Objects array
 const objects = [
   { x: 200, y: 150, width: 200, height: 200, type: 'rect', isDragging: false },
   { x: 500, y: 400, text: "Move Me!", type: 'text', isDragging: false }
@@ -50,7 +48,6 @@ function render() {
     }
   }
 
-  // Draw blinking input cursor
   if (inputActive) {
     ctx.fillStyle = `rgba(0,0,0,${inputFadeIn})`;
     ctx.font = "20px Arial";
@@ -94,14 +91,17 @@ canvas.addEventListener("mousedown", (e) => {
   lastX = mouseX;
   lastY = mouseY;
   dragObj = null;
+
+  const logicalX = (mouseX - panX) / zoom;
+  const logicalY = (mouseY - panY) / zoom;
   inputActive = true;
-  cursorX = (mouseX - panX) / zoom;
-  cursorY = (mouseY - panY) / zoom;
+  cursorX = logicalX;
+  cursorY = logicalY;
   inputText = "";
   inputFadeIn = 0;
 
   for (let obj of objects) {
-    if (isInsideObject((mouseX - panX) / zoom, (mouseY - panY) / zoom, obj)) {
+    if (isInsideObject(logicalX, logicalY, obj)) {
       dragObj = obj;
       obj.isDragging = true;
       inputActive = false;
@@ -139,11 +139,11 @@ canvas.addEventListener("mousemove", (e) => {
 
 canvas.addEventListener("mouseup", () => {
   isPanning = false;
-  canvas.style.cursor = "grab";
   if (dragObj) {
     dragObj.isDragging = false;
     dragObj = null;
   }
+  canvas.style.cursor = "grab";
 });
 
 canvas.addEventListener("mouseleave", () => {
@@ -162,14 +162,12 @@ canvas.addEventListener("wheel", (e) => {
 
   const scaleAmount = -e.deltaY * 0.001;
   const newZoom = zoom * (1 + scaleAmount);
-
   panX -= (mouseX - panX) * (newZoom / zoom - 1);
   panY -= (mouseY - panY) * (newZoom / zoom - 1);
   zoom = newZoom;
   render();
 }, { passive: false });
 
-// Keyboard typing
 window.addEventListener("keydown", (e) => {
   if (!inputActive) return;
   if (e.key === "Enter") {
@@ -181,7 +179,6 @@ window.addEventListener("keydown", (e) => {
     });
     inputActive = false;
     inputText = "";
-    // Animate fade in
     const obj = objects[objects.length - 1];
     let alpha = 0;
     const fadeInterval = setInterval(() => {
