@@ -78,6 +78,7 @@ canvas.addEventListener("mousedown", (e) => {
   const mouseX = e.clientX;
   const mouseY = e.clientY;
 
+  // 🖱️ Alt+Left click or Middle click = PAN
   if (e.button === 1 || (e.button === 0 && e.altKey)) {
     isPanning = true;
     panStartX = mouseX;
@@ -88,28 +89,33 @@ canvas.addEventListener("mousedown", (e) => {
     return;
   }
 
+  // 🧠 Check if clicked on object first
   lastX = mouseX;
   lastY = mouseY;
   dragObj = null;
 
-  const logicalX = (mouseX - panX) / zoom;
-  const logicalY = (mouseY - panY) / zoom;
-  inputActive = true;
-  cursorX = logicalX;
-  cursorY = logicalY;
-  inputText = "";
-  inputFadeIn = 0;
+  const clickX = (mouseX - panX) / zoom;
+  const clickY = (mouseY - panY) / zoom;
 
   for (let obj of objects) {
-    if (isInsideObject(logicalX, logicalY, obj)) {
+    if (isInsideObject(clickX, clickY, obj)) {
       dragObj = obj;
       obj.isDragging = true;
-      inputActive = false;
-      break;
+      inputActive = false; // 👈 Disallow typing on object
+      render();
+      return;
     }
   }
+
+  // ✅ If we reach here, it's empty space → activate typing
+  inputActive = true;
+  cursorX = clickX;
+  cursorY = clickY;
+  inputText = "";
+  inputFadeIn = 0;
   render();
 });
+
 
 canvas.addEventListener("mousemove", (e) => {
   const mouseX = e.clientX;
@@ -170,15 +176,19 @@ canvas.addEventListener("wheel", (e) => {
 
 window.addEventListener("keydown", (e) => {
   if (!inputActive) return;
+
   if (e.key === "Enter") {
     objects.push({
-      x: cursorX, y: cursorY,
+      x: cursorX,
+      y: cursorY,
       text: inputText,
       type: "text",
       fade: 0
     });
     inputActive = false;
     inputText = "";
+
+    // Animate fade in
     const obj = objects[objects.length - 1];
     let alpha = 0;
     const fadeInterval = setInterval(() => {
@@ -194,5 +204,6 @@ window.addEventListener("keydown", (e) => {
   }
   render();
 });
+
 
 render();
