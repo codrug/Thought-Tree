@@ -1,194 +1,201 @@
+// canvas.js
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-let dragObj = null;
+let isDragging = false;
 let lastX, lastY;
+let dragObj = null; // Currently dragged object
 
+// Variables for panning and zooming
 let panX = 0, panY = 0;
 let zoom = 1;
 let isPanning = false;
 let panStartX = 0, panStartY = 0;
 
-let isTyping = false;
-let typingText = "";
-let typingX = 0;
-let typingY = 0;
+let inputActive = false;
+let inputText = "";
+let cursorX = 0, cursorY = 0;
+let blink = true;
+let inputFadeIn = 1;
 
-// Object array
+// Objects array
 const objects = [
-    { x: 200, y: 150, width: 200, height: 200, type: 'rect' },
-    { x: 500, y: 400, text: "Move Me!", type: 'text' }
+  { x: 200, y: 150, width: 200, height: 200, type: 'rect', isDragging: false },
+  { x: 500, y: 400, text: "Move Me!", type: 'text', isDragging: false }
 ];
 
-// Resize canvas
 function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    render();
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  render();
 }
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Render all
 function render() {
-    // Reset transform first to clear whole canvas
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
+  ctx.clearRect(0, 0, canvas.width / zoom, canvas.height / zoom);
 
-    // Apply zoom + pan
-    ctx.setTransform(zoom, 0, 0, zoom, panX, panY);
-
-    for (let obj of objects) {
-        if (obj.type === 'rect') {
-            ctx.fillStyle = "lightblue";
-            ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
-        } else if (obj.type === 'text') {
-            ctx.fillStyle = "black";
-            ctx.font = "20px Arial";
-            ctx.fillText(obj.text, obj.x, obj.y);
-        }
-    }
-
-    if (isTyping) {
-        ctx.fillStyle = "darkgreen";
-        ctx.font = "24px Arial";
-        ctx.fillText(typingText + "|", typingX, typingY);
-    }
-}
-
-// Check if point in object
-function isInsideObject(x, y, obj) {
+  for (let obj of objects) {
     if (obj.type === 'rect') {
-        return x >= obj.x && x <= obj.x + obj.width &&
-            y >= obj.y && y <= obj.y + obj.height;
+      ctx.fillStyle = "lightblue";
+      ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
     } else if (obj.type === 'text') {
-        const textWidth = ctx.measureText(obj.text).width;
-        const textHeight = 20;
-        return x >= obj.x && x <= obj.x + textWidth &&
-            y >= obj.y - textHeight && y <= obj.y;
+      ctx.save();
+      ctx.globalAlpha = obj.fade || 1;
+      ctx.fillStyle = "black";
+      ctx.font = "20px Arial";
+      ctx.fillText(obj.text, obj.x, obj.y);
+      ctx.restore();
     }
-    return false;
+  }
+
+  // Draw blinking input cursor
+  if (inputActive) {
+    ctx.fillStyle = `rgba(0,0,0,${inputFadeIn})`;
+    ctx.font = "20px Arial";
+    ctx.fillText(inputText, cursorX, cursorY);
+    if (blink) {
+      const width = ctx.measureText(inputText).width;
+      ctx.fillRect(cursorX + width + 2, cursorY - 15, 2, 20);
+    }
+  }
 }
 
-// Mouse down
+setInterval(() => {
+  blink = !blink;
+  render();
+}, 500);
+
+function isInsideObject(x, y, obj) {
+  if (obj.type === 'rect') {
+    return x >= obj.x && x <= obj.x + obj.width && y >= obj.y && y <= obj.y + obj.height;
+  } else if (obj.type === 'text') {
+    const textWidth = ctx.measureText(obj.text).width;
+    return x >= obj.x && x <= obj.x + textWidth && y >= obj.y - 20 && y <= obj.y;
+  }
+  return false;
+}
+
 canvas.addEventListener("mousedown", (e) => {
-    const mouseX = e.clientX;
-    const mouseY = e.clientY;
-    canvas.style.cursor = "grabbing";
+  const mouseX = e.clientX;
+  const mouseY = e.clientY;
 
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
-        isPanning = true;
-        panStartX = mouseX;
-        panStartY = mouseY;
-        return;
+  if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    isPanning = true;
+    panStartX = mouseX;
+    panStartY = mouseY;
+    canvas.style.cursor = "all-scroll";
+    inputActive = false;
+    render();
+    return;
+  }
+
+  lastX = mouseX;
+  lastY = mouseY;
+  dragObj = null;
+  inputActive = true;
+  cursorX = (mouseX - panX) / zoom;
+  cursorY = (mouseY - panY) / zoom;
+  inputText = "";
+  inputFadeIn = 0;
+
+  for (let obj of objects) {
+    if (isInsideObject((mouseX - panX) / zoom, (mouseY - panY) / zoom, obj)) {
+      dragObj = obj;
+      obj.isDragging = true;
+      inputActive = false;
+      break;
     }
+  }
+  render();
+});
 
+canvas.addEventListener("mousemove", (e) => {
+  const mouseX = e.clientX;
+  const mouseY = e.clientY;
+
+  if (isPanning) {
+    const dx = mouseX - panStartX;
+    const dy = mouseY - panStartY;
+    panX += dx;
+    panY += dy;
+    panStartX = mouseX;
+    panStartY = mouseY;
+    render();
+    return;
+  }
+
+  if (dragObj) {
+    const dx = (mouseX - lastX) / zoom;
+    const dy = (mouseY - lastY) / zoom;
+    dragObj.x += dx;
+    dragObj.y += dy;
     lastX = mouseX;
     lastY = mouseY;
-    dragObj = null;
-
-    const canvasX = (mouseX - panX) / zoom;
-    const canvasY = (mouseY - panY) / zoom;
-
-    for (let obj of objects) {
-        if (isInsideObject(canvasX, canvasY, obj)) {
-            dragObj = obj;
-            break;
-        }
-    }
-
-    if (!dragObj && e.button === 0 && !e.altKey) {
-        isTyping = true;
-        typingText = "";
-        typingX = canvasX;
-        typingY = canvasY;
-        render();
-    }
+    render();
+  }
 });
 
-// Mouse move
-canvas.addEventListener("mousemove", (e) => {
-    const mouseX = e.clientX;
-    const mouseY = e.clientY;
-
-    if (isPanning) {
-        const dx = mouseX - panStartX;
-        const dy = mouseY - panStartY;
-        panX += dx;
-        panY += dy;
-        panStartX = mouseX;
-        panStartY = mouseY;
-        render();
-        return;
-    }
-
-    if (dragObj) {
-        const dx = (mouseX - lastX) / zoom;
-        const dy = (mouseY - lastY) / zoom;
-
-        dragObj.x += dx;
-        dragObj.y += dy;
-
-        lastX = mouseX;
-        lastY = mouseY;
-        render();
-    }
-});
-
-// Mouse up & leave
 canvas.addEventListener("mouseup", () => {
-    isPanning = false;
+  isPanning = false;
+  canvas.style.cursor = "grab";
+  if (dragObj) {
+    dragObj.isDragging = false;
     dragObj = null;
-    canvas.style.cursor = "grab";
+  }
 });
 
 canvas.addEventListener("mouseleave", () => {
-    isPanning = false;
-    dragObj = null;
-    canvas.style.cursor = "grab";
+  isPanning = false;
+  if (dragObj) dragObj.isDragging = false;
+  dragObj = null;
+  canvas.style.cursor = "grab";
 });
+
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const mouseX = e.clientX;
+  const mouseY = e.clientY;
+  const canvasX = (mouseX - panX) / zoom;
+  const canvasY = (mouseY - panY) / zoom;
+
+  const scaleAmount = -e.deltaY * 0.001;
+  const newZoom = zoom * (1 + scaleAmount);
+
+  panX -= (mouseX - panX) * (newZoom / zoom - 1);
+  panY -= (mouseY - panY) * (newZoom / zoom - 1);
+  zoom = newZoom;
+  render();
+}, { passive: false });
 
 // Keyboard typing
 window.addEventListener("keydown", (e) => {
-    if (!isTyping) return;
-
-    if (e.key === "Enter") {
-        if (typingText.trim() !== "") {
-            objects.push({
-                type: "text",
-                text: typingText,
-                x: typingX,
-                y: typingY
-            });
-        }
-        isTyping = false;
-        typingText = "";
-        render();
-    } else if (e.key === "Backspace") {
-        typingText = typingText.slice(0, -1);
-        render();
-    } else if (e.key.length === 1) {
-        typingText += e.key;
-        render();
-    }
+  if (!inputActive) return;
+  if (e.key === "Enter") {
+    objects.push({
+      x: cursorX, y: cursorY,
+      text: inputText,
+      type: "text",
+      fade: 0
+    });
+    inputActive = false;
+    inputText = "";
+    // Animate fade in
+    const obj = objects[objects.length - 1];
+    let alpha = 0;
+    const fadeInterval = setInterval(() => {
+      alpha += 0.05;
+      obj.fade = alpha;
+      render();
+      if (alpha >= 1) clearInterval(fadeInterval);
+    }, 16);
+  } else if (e.key === "Backspace") {
+    inputText = inputText.slice(0, -1);
+  } else if (e.key.length === 1) {
+    inputText += e.key;
+  }
+  render();
 });
 
-// Zoom (wheel)
-canvas.addEventListener("wheel", (e) => {
-    e.preventDefault();
-
-    const mouseX = e.clientX;
-    const mouseY = e.clientY;
-    const canvasX = (mouseX - panX) / zoom;
-    const canvasY = (mouseY - panY) / zoom;
-
-    const scaleAmount = -e.deltaY * 0.001;
-    const newZoom = zoom * (1 + scaleAmount);
-
-    panX -= (mouseX - panX) * (newZoom / zoom - 1);
-    panY -= (mouseY - panY) * (newZoom / zoom - 1);
-
-    zoom = newZoom;
-    render();
-}, { passive: false });
-
+render();
